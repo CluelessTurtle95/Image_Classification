@@ -73,11 +73,15 @@ class network:
             self.G_weights[i] += ( self.error[i + 1] * self.relu_p(self.z[i]) ) @ np.transpose(self.l[i]) + lambd * self.weights[i]
 
     def learn(self , X , result  , data_index , lambd , alpha , max_iter):
+        cost_saver = [None] * max_iter
         for i in range(max_iter):
             self.J_prime( X , result , data_index , lambd)
-            for i in range(self.Num_layers - 2):
-                self.b[i]  = self.b[i] - alpha * self.G_b[i]
-                self.weights[i]  = self.weights[i] - alpha * self.G_weights[i]
+            for j in range(self.Num_layers - 2):
+                self.b[j]  = self.b[j] - alpha * self.G_b[j]
+                self.weights[j]  = self.weights[j] - alpha * self.G_weights[j]
+            cost_saver[i] = self.cost(X , result , data_index)
+            
+        return cost_saver
     
     def cost(self , X , result , data_index):
         b = 0
@@ -88,6 +92,18 @@ class network:
             b += np.sum(a) / np.size(a)
         b = b / data_index
         return b
+    
+    def plot_cost(self , X , result , data_index , lambd , alpha , max_iter):
+        axis_x = np.linspace( 0  , max_iter , 1 + max_iter)
+        axis_y = self.learn(X ,result , data_index , lambd , alpha , max_iter)
+        axis_y.append(axis_y[99])
+        plt.plot(axis_x , axis_y )
+        plt.xlabel( "Iterations" )
+        plt.ylabel( "Cost" )
+        plt.title( "Cost Vs Iterations" )
+        plt.show()
+        k
+
         
 def createlayers(layer_elements):
     a = list()
@@ -101,5 +117,4 @@ h = createlayers([10 , 4 , 4 , 2 , 2])
 net = network([10 , 4 , 4 , 2 , 2])
 X = np.random.rand(10 , 20)
 result  = np.random.rand(2 , 20)
-
-net.learn( X , result , 8 , 0.01 , 0.01 , 10)
+net.plot_cost( X , result , 8 , 0.1 , 0.01 , 1000)
