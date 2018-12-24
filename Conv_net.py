@@ -17,8 +17,12 @@ class network:
         for i in Element_Num_layers[1 : -1 ] : # random biases
             self.b.append(np.random.rand( i , 1)) 
         
-
-    def Forward_Propogation(self , x):
+        # setting random feature maps
+        self.fm1 = np.random.rand( 1 , 2 , 5 , 5)
+        self.fm2 = np.random.rand( 2 , 2 , 3 , 3)
+        self.fm3 = np.random.rand( 4 , 3 , 3 , 3)
+    
+    def Forward_Propogation_FC(self , x):
         self.l[0] = x
         self.l[0] = self.l[0].reshape( np.size(self.l[0]) , 1)
         for i in range(self.Num_layers - 2):
@@ -56,7 +60,7 @@ class network:
         t = t / np.sum(t)
         return t
 
-    def delta(self , y):
+    def delta_FC(self , y):
         y = y.reshape(np.size(y),1)
         self.error = list()
         self.error.insert( 0 , (self.l[-1] - y) / self.Num_layers ) 
@@ -66,13 +70,14 @@ class network:
             self.error.insert(0 , np.transpose(self.weights[self.Num_layers - 1 - i]) @ (self.error[0] * self.relu_p( self.z[self.Num_layers - 1 - i])))
 
     def gradient(self , x , y , lambd):
-        self.Forward_Propogation(x) # self.Num_layers - 1 - i = l - k (see hand calculations)
-        self.delta(y)
+        self.Forward_Propogation_FC(x) # self.Num_layers - 1 - i = l - k (see hand calculations)
+        self.delta_FC(y)
         for i in range(self.Num_layers - 2):
             self.G_b[i] +=  self.error[i + 1] * self.relu_p(self.z[i]) 
             self.G_weights[i] += ( self.error[i + 1] * self.relu_p(self.z[i]) ) @ np.transpose(self.l[i]) + lambd * self.weights[i]
 
     def learn(self , X , result  , data_index , lambd , alpha , max_iter):
+        
         cost_saver = [None] * max_iter
         for i in range(max_iter):
             self.J_prime( X , result , data_index , lambd)
@@ -83,10 +88,10 @@ class network:
             
         return cost_saver
     
-    def cost(self , X , result , data_index):
+    def cost(self , img , result , data_index):
         b = 0
         for i in range(data_index):
-            self.Forward_Propogation(X[: , i])
+            self.Forward_Propogation_conv(img[i , : , : , :])
             a = self.l[self.Num_layers - 1].reshape( np.size(self.l[self.Num_layers - 1] ) , 1) - result[: , i].reshape( np.size(result[: , i]) , 1)
             a = a*a
             b += np.sum(a) / np.size(a)
@@ -102,9 +107,72 @@ class network:
         plt.ylabel( "Cost" )
         plt.title( "Cost Vs Iterations" )
         plt.show()
-        k
-
+    
+    def convolve(self , img , feature_map): # features should be odd x odd to keep image sizes even for pooling
+        Num_channel = np.size( img , axis = 0)
+        Num_features = np.size(feature_map , axis = 1)
+        if ( Num_channel != np.size(feature_map , axis = 0) ):
+            raise Exception
+        final = np.zeros( Num_channel * Num_features , np.size(img , axis = 1) - np.size(feature_map , axis = 2)  + 1 , np.size(img , axis = 2) - np.size(feature_map , axis = 3)  + 1 )
+        # final image is a litle bit smaller but has many more channels. 
+        for i in range(Num_channel): # i is the depth channel
+            initial = img[ i , : , : ]
+            for j in range( Num_features ): # j is the number of feature matrices per channel\\\
+                final[ j + Num_features * i , : , : ] = self.conv( initial , feature_map[i , j , : , :] )
+        return final
         
+    def conv(self , img  , feature):
+        result  = np.zeros(  np.size(img , axis = 0) - np.size(feature , axis = 0)  + 1 , np.size(img , axis = 1) - np.size(feature , axis = 1)  + 1 )
+        for i in range(np.size(result  , axis = 0)):
+            for j in range(np.size(result  , axis = 1)):
+                result[ i , j ] = img[ i : i + np.size(feature  , axis = 0)  , j : j + np.size(feature  , axis = 1)  ] * feature
+        return result
+    
+    def max_pooling(self  , img  , pool_map):
+        Num_channel = np.size(img , axis = 0)
+        final = np.zeros( np.size( img  , axis = 0)  , np.size( img  , axis = 1) / pool_map[0] , np.size( img  , axis = 2)  / pool_map[1] )
+        for i in range(Num_channel):
+            initial = img[i , : , :]
+            final[i , : , :] = self.max_pool( initial  , pool_map ) 
+        return final
+
+    def max_pool(self , img  , pool_map):
+        # pool map is numpy array of pooling size like [4 , 4] for 4 x 4
+        final = np.zeros( np.size( img  , axis=0) / pool_map[0], np.size( img  , axis=1) / pool_map[1]) 
+        for i in range( 0  , np.size(img  , axis=0) - pool_map[0], pool_map[0] ):
+            for j in range( 0  , np.size(img  , axis=1) - pool_map[1], pool_map[1] ):
+                final[ i / pool_map[0] , j / pool_map[1] ]  = np.max( img[ i : i + pool_map[0] ,  j : j + pool_map[1]] )
+        return final
+
+    def Forward_Propogation_conv(self , img ):
+        # 3 convololutional layers
+        img = self.convolve( img , self.fm1 )
+        img = self.relu(img)
+        img = self.max_pooling( img , np.array([2 , 2]) )
+
+        img = self.convolve( img , self.fm2 )
+        img = self.relu(img)
+        img = self.max_pooling( img , np.array([2 , 2]) )
+
+        img = self.convolve( img , self.fm3 )
+        img = self.relu(img)
+        img = self.max_pooling( img , np.array([4 , 4]) )
+
+        img = img.reshape( np.size(img) , 1)
+
+        self.Forward_Propogation_FC(img)
+"""
+    def newlearn(self):
+        X # set of images  [ number of images  , chanels , x-size , y-size ]
+        result # set of classes [  0-10 or something ]  matching X
+        for i in range(data_index):
+            
+            X[i , : , : , :] 
+"""
+    
+
+
+       
 def createlayers(layer_elements):
     a = list()
     for i in layer_elements:
