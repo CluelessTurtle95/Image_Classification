@@ -1,26 +1,59 @@
+# Image Classification Program 
+# Using MNIST
+# Image size is 32 x 32 pixels 
+# Steps : 
+# 1 Image processing
+#       Convert Image to correct size
+#       Make Image Grayscale
+# 2 PreProcessing
+#       Make Mean of each Image 0
+#       Normalize by standard deviation
+# 3 Neural Network Tranining
+#       3.1 Convolution
+#               18 Kernels in total across 3 convolutional + Relu Layers
+#               2 Pooling Layers to reduce features for fully connected part
+#       3.2 Fully Connected
+#               192 features in first layer
+#               40 features in both hidden layers
+#               10 classes      
+
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 
 class network:
-    def __init__(self , Element_Num_layers ): # element_num_layers like  [ 10 , 4 , 4 , 2 , 2] for network with two hidden layers of 4 each and two classes 
+    def __init__(self , fm , Element_Num_layers ): # element_num_layers like  [ 10 , 4 , 4 , 2 , 2] for network with two hidden layers of 4 each and two classes 
+        
+        # Initializations 
         self.weights = list()
-        self.error = list()
         self.b = list()
         self.G_weights = list()
         self.G_b = list()
+        self.error = list()
+        
         self.Num_layers = len(Element_Num_layers)
         self.l = createlayers(Element_Num_layers)
         self.z = [None] * 3
-        for index , layer in enumerate(self.l[0 : - 2] ) :  # random weights
+
+        # random weights
+        for index , layer in enumerate(self.l[0 : - 2] ) :  
             self.weights.append( np.random.rand( len(self.l[index + 1]) , len(layer)  ) )
-        for i in Element_Num_layers[1 : -1 ] : # random biases
+        
+        # random biases
+        for i in Element_Num_layers[1 : -1 ] : 
             self.b.append(np.random.rand( i , 1)) 
         
-        # setting random feature maps
-        self.fm1 = np.random.rand( 1 , 2 , 5 , 5)
-        self.fm2 = np.random.rand( 2 , 2 , 3 , 3)
-        self.fm3 = np.random.rand( 4 , 3 , 3 , 3)
+        # setting inital feature maps
+        self.fm0 = fm[0]
+        self.fm1 = fm[2]
+        self.fm2 = fm[2]
+
+        # Initializing all gradients
+        self.G_b = [None] * len(self.b)
+        self.G_weights = [None] * len(self.weights)
+        self.G_fm0 = np.zeros_like(self.fm0)
+        self.G_fm1 = np.zeros_like(self.fm1)
+        self.G_fm2 = np.zeros_like(self.fm2) 
     
     def Forward_Propogation_FC(self , x):
         self.l[0] = x
@@ -31,21 +64,44 @@ class network:
 
         self.l[self.Num_layers - 1] = self.softmax(self.l[self.Num_layers - 2])
 
-    def J_prime(self , X , result , data_index , lambd):
-        self.G_b = [None] * len(self.b)
-        self.G_weights = [None] * len(self.weights)
-        
+    def J_prime(self , X , result , data_index , lambd): 
+        # J_prime is a wrapper for gradient_conv
+        # Initializing all gradients of Fully Connected layer as zero
         for index , b in enumerate(self.b):
             self.G_b[index] = np.zeros_like(b)
             self.G_weights[index] = np.zeros_like(self.weights[index])
         
         for m in range(data_index):
-            self.gradient(X[ : , m] , result[: , m]  , lambd)
+            self.gradient_conv( X[m , : , : , :] , result[: , m]  , lambd)
         
+        # gradient_conv adds all gradients so for loop to average the results.
         for index , b  in enumerate(self.b):
             self.G_b[index] = self.G_b[index] / data_index
             self.G_weights[index] = self.G_weights[index] / data_index
-         
+        
+        self.G_fm0 = self.G_fm0 / data_index
+        self.G_fm1 = self.G_fm1 / data_index
+        self.G_fm2 = self.G_fm2 / data_index
+
+    def gradient_conv(self , img , y , lambd):
+        # Doing Fprward propogatin
+        self.Forward_Propogation_conv(img)
+
+        # Doing Back propogation
+        self.gradient_FC( y , lambd) # Fully connected errors and gradients of weights and biases ready
+
+        j = 0
+        # Rolling the layer 0 to Im 3 
+        a = np.floor( j/np.size(im3[0 , : , : ]) )
+        b = np.floor( (j - a*np.size(im3[0 , : , :])) / np.size ( im3[0 , 0 , :] ) )
+        c = (j - a*np.size(im3[0 , : , :])) % np.size ( im3[0 , 0 , :] )
+
+        d = np.floor( a / np.size(self.fm2 , axis = 1 ) )
+        e = a % np.size(self.fm2 , axis = 1 )
+
+        #  L0[j] = Im3[ a , b , c ] <- conv( fm2[d , e , : , :] ,  Im2[d , : , :] )
+        pass
+
     def relu(self , t):
         t[ t < 0 ]  = 0
         return t 
@@ -62,15 +118,15 @@ class network:
 
     def delta_FC(self , y):
         y = y.reshape(np.size(y),1)
-        self.error = list()
+
         self.error.insert( 0 , (self.l[-1] - y) / self.Num_layers ) 
-        
         self.error.insert( 0 , self.error[0] * self.l[-1] * (1 - self.l[-1]) ) # L_sub(l) = self.l[-1]
+        
         for i in range(2 , self.Num_layers ):
             self.error.insert(0 , np.transpose(self.weights[self.Num_layers - 1 - i]) @ (self.error[0] * self.relu_p( self.z[self.Num_layers - 1 - i])))
 
-    def gradient(self , x , y , lambd):
-        self.Forward_Propogation_FC(x) # self.Num_layers - 1 - i = l - k (see hand calculations)
+    def gradient_FC(self , y , lambd):
+        # Forward pass assumed to be done in gradient_conv
         self.delta_FC(y)
         for i in range(self.Num_layers - 2):
             self.G_b[i] +=  self.error[i + 1] * self.relu_p(self.z[i]) 
@@ -80,28 +136,36 @@ class network:
         
         cost_saver = [None] * max_iter
         for i in range(max_iter):
+            # Calculate gradients
             self.J_prime( X , result , data_index , lambd)
+            
+            # Using Gradient descent
             for j in range(self.Num_layers - 2):
                 self.b[j]  = self.b[j] - alpha * self.G_b[j]
                 self.weights[j]  = self.weights[j] - alpha * self.G_weights[j]
+            
+            self.fm0 = self.fm0 - alpha * self.G_fm0
+            self.fm1 = self.fm1 - alpha * self.G_fm1
+            self.fm2 = self.fm2 - alpha * self.G_fm2
+            
+            # Saving Cost Vs Iterations for visualizations
             cost_saver[i] = self.cost(X , result , data_index)
             
         return cost_saver
     
-    def cost(self , img , result , data_index):
+    def cost(self , X , result , data_index):
         b = 0
         for i in range(data_index):
-            self.Forward_Propogation_conv(img[i , : , : , :])
+            self.Forward_Propogation_conv(X[i , : , : , :])
             a = self.l[self.Num_layers - 1].reshape( np.size(self.l[self.Num_layers - 1] ) , 1) - result[: , i].reshape( np.size(result[: , i]) , 1)
-            a = a*a
-            b += np.sum(a) / np.size(a)
+            b += np.sum(a*a) / np.size(a)
         b = b / data_index
         return b
     
     def plot_cost(self , X , result , data_index , lambd , alpha , max_iter):
         axis_x = np.linspace( 0  , max_iter , 1 + max_iter)
         axis_y = self.learn(X ,result , data_index , lambd , alpha , max_iter)
-        axis_y.append(axis_y[99])
+        axis_y.append(axis_y[-1])
         plt.plot(axis_x , axis_y )
         plt.xlabel( "Iterations" )
         plt.ylabel( "Cost" )
@@ -125,7 +189,7 @@ class network:
         result  = np.zeros(  np.size(img , axis = 0) - np.size(feature , axis = 0)  + 1 , np.size(img , axis = 1) - np.size(feature , axis = 1)  + 1 )
         for i in range(np.size(result  , axis = 0)):
             for j in range(np.size(result  , axis = 1)):
-                result[ i , j ] = img[ i : i + np.size(feature  , axis = 0)  , j : j + np.size(feature  , axis = 1)  ] * feature
+                result[ i , j ] = np.sum (img[ i : i + np.size(feature  , axis = 0)  , j : j + np.size(feature  , axis = 1)  ] * feature)
         return result
     
     def max_pooling(self  , img  , pool_map):
@@ -146,43 +210,34 @@ class network:
 
     def Forward_Propogation_conv(self , img ):
         # 3 convololutional layers
+        img = self.convolve( img , self.fm0 )
+        img = self.relu(img)
+        img = self.max_pooling( img , np.array([2 , 2]) )
+
         img = self.convolve( img , self.fm1 )
         img = self.relu(img)
         img = self.max_pooling( img , np.array([2 , 2]) )
 
         img = self.convolve( img , self.fm2 )
         img = self.relu(img)
-        img = self.max_pooling( img , np.array([2 , 2]) )
-
-        img = self.convolve( img , self.fm3 )
-        img = self.relu(img)
-        img = self.max_pooling( img , np.array([4 , 4]) )
 
         img = img.reshape( np.size(img) , 1)
 
         self.Forward_Propogation_FC(img)
-"""
-    def newlearn(self):
-        X # set of images  [ number of images  , chanels , x-size , y-size ]
-        result # set of classes [  0-10 or something ]  matching X
-        for i in range(data_index):
-            
-            X[i , : , : , :] 
-"""
-    
 
-
-       
 def createlayers(layer_elements):
     a = list()
     for i in layer_elements:
         a.append( np.zeros( (i , 1) ) )
     return a
 
-h = createlayers([10 , 4 , 4 , 2 , 2])
-#print(h[0] , np.len(h[0]))
+fm0 = np.random.rand( 1 , 2 , 5 , 5)
+fm1 = np.random.rand( 2 , 2 , 3 , 3)
+fm2 = np.random.rand( 4 , 3 , 3 , 3)
 
-net = network([10 , 4 , 4 , 2 , 2])
-X = np.random.rand(10 , 20)
-result  = np.random.rand(2 , 20)
-net.plot_cost( X , result , 8 , 0.1 , 0.01 , 1000)
+net = network( [fm0 , fm1 , fm2] , [192 , 40 , 40 , 10 , 10])
+
+# X = np.random.rand(10 , 20)
+# result  = np.random.rand(2 , 20)
+
+net.plot_cost( X , result , len(X) , 0.1 , 0.01 , 200)
