@@ -1,8 +1,9 @@
 # Image_Classification
 
 #### Note : 
-###### BackPropogation hasn't been implemented completely for all layers yet. [First two convolution layers left]
-###### Image Preprocesssing not done yet
+**Image Preprocesssing not done yet**
+
+**All of the math done by me and not confirmed properly from online sources (especially for convolution backprop) so take the code with a grain of salt**
 
 Convolutional Neural Network from scratch using only Numpy in python. 
 
