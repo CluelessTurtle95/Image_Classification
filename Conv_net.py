@@ -89,19 +89,30 @@ class network:
 
         # Doing Back propogation
         self.gradient_FC( y , lambd) # Fully connected errors and gradients of weights and biases ready
-
-        j = 0
+        #j = 0
         # Rolling the layer 0 to Im 3 
-        a = np.floor( j/np.size(im3[0 , : , : ]) )
-        b = np.floor( (j - a*np.size(im3[0 , : , :])) / np.size ( im3[0 , 0 , :] ) )
-        c = (j - a*np.size(im3[0 , : , :])) % np.size ( im3[0 , 0 , :] )
-
-        d = np.floor( a / np.size(self.fm2 , axis = 1 ) )
-        e = a % np.size(self.fm2 , axis = 1 )
+        #a = np.floor( j/np.size(self.Im3[0 , : , : ]) )
+        #b = np.floor( (j - a*np.size(self.Im3[0 , : , :])) / np.size ( self.Im3[0 , 0 , :] ) )
+        #c = (j - a*np.size(self.Im3[0 , : , :])) % np.size ( self.Im3[0 , 0 , :] )
+        
+        #d = np.floor( a / np.size(self.fm2 , axis = 1 ) )
+        #e = a % np.size(self.fm2 , axis = 1 )
 
         #  L0[j] = Im3[ a , b , c ] <- conv( fm2[d , e , : , :] ,  Im2[d , : , :] )
-        pass
-
+        
+        # calculating gradients for layer fm2
+        for k in range(self.fm2.shape[0]):
+            for l in range(self.fm2.shape[1]):
+                a = k * np.size( self.fm2[0 , : , 0 , 0] ) + l 
+                for m in range(self.fm2.shape[2]):
+                    for n in range(self.fm2.shape[3]):
+                        self.G_fm2[ k , l , m , n ] = 0
+                        for j in range( a * np.size( self.Im3[0 , : , :]) , (a+1)* np.size( self.Im3[0 , : , :]) ):
+                            h = np.floor( j/np.size(self.Im3[0 , : , : ]) )
+                            b = np.floor( (j - h*np.size(self.Im3[0 , : , :])) / np.size ( self.Im3[0 , 0 , :] ) )
+                            c = (j - h*np.size(self.Im3[0 , : , :])) % np.size ( self.Im3[0 , 0 , :] )
+                            self.G_fm2[ k , l , m , n ] += self.error[0][j] * self.Im2[k , b + m , n + c]
+    
     def relu(self , t):
         t[ t < 0 ]  = 0
         return t 
@@ -210,16 +221,24 @@ class network:
 
     def Forward_Propogation_conv(self , img ):
         # 3 convololutional layers
+        self.Im0 = img
+
         img = self.convolve( img , self.fm0 )
         img = self.relu(img)
         img = self.max_pooling( img , np.array([2 , 2]) )
+
+        self.Im1 = img
 
         img = self.convolve( img , self.fm1 )
         img = self.relu(img)
         img = self.max_pooling( img , np.array([2 , 2]) )
 
+        self.Im2 = img
+
         img = self.convolve( img , self.fm2 )
         img = self.relu(img)
+
+        self.Im3 = img
 
         img = img.reshape( np.size(img) , 1)
 
@@ -240,4 +259,4 @@ net = network( [fm0 , fm1 , fm2] , [192 , 40 , 40 , 10 , 10])
 # X = np.random.rand(10 , 20)
 # result  = np.random.rand(2 , 20)
 
-net.plot_cost( X , result , len(X) , 0.1 , 0.01 , 200)
+#net.plot_cost( X , result , len(X) , 0.1 , 0.01 , 200)
