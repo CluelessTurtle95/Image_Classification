@@ -1,22 +1,3 @@
-# Image Classification Program 
-# Using MNIST
-# Image size is 32 x 32 pixels 
-# Steps : 
-# 1 Image processing
-#       Convert Image to correct size
-#       Make Image Grayscale
-# 2 PreProcessing
-#       Make Mean of each Image 0
-#       Normalize by standard deviation
-# 3 Neural Network Tranining
-#       3.1 Convolution
-#               18 Kernels in total across 3 convolutional + Relu Layers
-#               2 Pooling Layers to reduce features for fully connected part
-#       3.2 Fully Connected
-#               192 features in first layer
-#               40 features in both hidden layers
-#               10 classes      
-
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
@@ -88,31 +69,65 @@ class network:
         self.Forward_Propogation_conv(img)
 
         # Doing Back propogation
-        self.gradient_FC( y , lambd) # Fully connected errors and gradients of weights and biases ready
-        #j = 0
-        # Rolling the layer 0 to Im 3 
-        #a = np.floor( j/np.size(self.Im3[0 , : , : ]) )
-        #b = np.floor( (j - a*np.size(self.Im3[0 , : , :])) / np.size ( self.Im3[0 , 0 , :] ) )
-        #c = (j - a*np.size(self.Im3[0 , : , :])) % np.size ( self.Im3[0 , 0 , :] )
-        
-        #d = np.floor( a / np.size(self.fm2 , axis = 1 ) )
-        #e = a % np.size(self.fm2 , axis = 1 )
 
-        #  L0[j] = Im3[ a , b , c ] <- conv( fm2[d , e , : , :] ,  Im2[d , : , :] )
+        # Fully connected errors and gradients of weights and biases
+        self.gradient_FC( y , lambd) 
+              
+        # Calculating gradient for unrolled layer Im3
+        self.G_Im3 = self.error[0].reshape( self.Im3.shape )
         
-        # calculating gradients for layer fm2
-        for k in range(self.fm2.shape[0]):
-            for l in range(self.fm2.shape[1]):
-                a = k * np.size( self.fm2[0 , : , 0 , 0] ) + l 
-                for m in range(self.fm2.shape[2]):
-                    for n in range(self.fm2.shape[3]):
-                        self.G_fm2[ k , l , m , n ] = 0
-                        for j in range( a * np.size( self.Im3[0 , : , :]) , (a+1)* np.size( self.Im3[0 , : , :]) ):
-                            h = np.floor( j/np.size(self.Im3[0 , : , : ]) )
-                            b = np.floor( (j - h*np.size(self.Im3[0 , : , :])) / np.size ( self.Im3[0 , 0 , :] ) )
-                            c = (j - h*np.size(self.Im3[0 , : , :])) % np.size ( self.Im3[0 , 0 , :] )
-                            self.G_fm2[ k , l , m , n ] += self.error[0][j] * self.Im2[k , b + m , n + c]
-    
+        # Calculating gradients for feature map fm2
+        self.G_fm2 = self.error2grad( self.G_Im3 , self.Im2)
+
+        # Calculating gradient for layer Im2
+        self.G_Im2 = self.error_conv( self.G_Im3 , self.fm2 )
+
+        # Calculating the gradient for pooling layer 2
+        G_Im2_unpool = self.Im2 # do this
+
+        # apply relu_p
+        G_Im2_unpool = self.relu_p(G_Im2_unpool)
+
+        # Calculating gradients for feature map fm1
+        self.G_fm1 = self.error2grad(G_Im2_unpool , self.Im1)
+
+        # Calculating gradient for layer Im1
+        self.G_Im1 = self.error_conv( self.G_Im2 , self.fm1 )
+        
+        # Calculating the gradient for pooling layer 1
+        G_Im1_unpool = self.Im1 # do this
+
+        # apply relu_p
+        G_Im1_unpool = self.relu_p(G_Im1_unpool)
+
+        # Calculating gradients for feature map fm0
+        self.G_fm0 = self.error2grad( G_Im1_unpool , self.Im0)
+        #
+
+    def error_conv(self , G_Imk , fm_k_1 ): # fm_k_1 denotes fm(k-1)
+        # function to calculate G_ImK_1
+        G_Imk_1 = np.zeros( fm_k_1.shape[0] , G_Imk.shape[1] + fm_k_1.shape[2] -1 , G_Imk.shape[2] + fm_k_1.shape[3] - 1)
+        for a in range( 0 , G_Imk[0]):
+            for b in range( 0 , G_Imk[1]):
+                for c in range( 0 , G_Imk[2]):
+                    z_range = range( a * fm_k_1.shape[1] , (a+1)* fm_k_1.shape[1] )
+                    # z is the image number in Imk
+                    for z in z_range:
+                        l = z % fm_k_1.shape[1]
+                        for i in range(b , b - fm_k_1.shape[2] , -1 ):
+                            for j in range(c , c - fm_k_1.shape[3] , -1 ):
+                                G_Imk_1[ a , b , c] += G_Imk[z , i , j] * fm_k_1[a , l , b - i , c - j]
+        return G_Imk_1
+        #
+
+    def error2grad(self , G_Imk , Imk_1):
+        G_fm_k_1 = np.zeros( Imk_1.shape[0] , G_Imk.shape[0]/Imk_1.shape[0] , Imk_1[1] - G_Imk[1] + 1 , Imk_1[2] - G_Imk[2] + 1 )
+        for m in range( G_fm_k_1.shape[0]):
+            for n in range( G_fm_k_1.shape[1]):
+                z = m * G_fm_k_1.shape[1] + n
+                G_fm_k_1[ m , n  , : , :] = self.conv(Imk_1[m , : , :] , G_Imk[z , : , :] ) # dont ask for explanation it took me 3 hours to come up with this line of code.
+        return G_fm_k_1
+
     def relu(self , t):
         t[ t < 0 ]  = 0
         return t 
@@ -228,17 +243,20 @@ class network:
         img = self.max_pooling( img , np.array([2 , 2]) )
 
         self.Im1 = img
+        self.G_Im1 = np.zeros_like(self.Im1)
 
         img = self.convolve( img , self.fm1 )
         img = self.relu(img)
         img = self.max_pooling( img , np.array([2 , 2]) )
 
         self.Im2 = img
+        self.G_Im2 = np.zeros_like(self.Im2)
 
         img = self.convolve( img , self.fm2 )
         img = self.relu(img)
 
         self.Im3 = img
+        self.G_Im3 = np.zeros_like(self.Im3)
 
         img = img.reshape( np.size(img) , 1)
 
