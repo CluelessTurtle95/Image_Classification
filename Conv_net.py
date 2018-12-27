@@ -2,6 +2,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 
+import helper
+from scipy import signal
+
 class network:
     def __init__(self , fm , Element_Num_layers ): # element_num_layers like  [ 10 , 4 , 4 , 2 , 2] for network with two hidden layers of 4 each and two classes 
         
@@ -79,31 +82,31 @@ class network:
         self.G_Im3 = self.relu_p(self.G_Im3)
 
         # Calculating gradients for feature map fm2
-        self.G_fm2 = self.error2grad( self.G_Im3 , self.Im2)
+        self.G_fm2 = helper.error2grad( self.G_Im3 , self.Im2)
 
         # Calculating gradient for layer Im2
-        self.G_Im2 = self.error_conv( self.G_Im3 , self.fm2 )
+        self.G_Im2 = helper.error_conv( self.G_Im3 , self.fm2 )
 
         # Calculating the gradient for pooling layer 2
-        G_Im2_unpool = self.unpool(self.G_Im2  ,  self.Im2_unpool ,  [2 , 2] )
+        G_Im2_unpool = helper.unpool(self.G_Im2  ,  self.Im2_unpool ,  np.array([2 , 2]) )
 
         # apply relu_p
         G_Im2_unpool = self.relu_p(G_Im2_unpool)
 
         # Calculating gradients for feature map fm1
-        self.G_fm1 = self.error2grad(G_Im2_unpool , self.Im1)
+        self.G_fm1 = helper.error2grad(G_Im2_unpool , self.Im1)
 
         # Calculating gradient for layer Im1
-        self.G_Im1 = self.error_conv( G_Im2_unpool , self.fm1 ) # proble here , G_im1 changes sign
+        self.G_Im1 = helper.error_conv( G_Im2_unpool , self.fm1 ) # proble here , G_im1 changes sign
         
         # Calculating the gradient for pooling layer 1
-        G_Im1_unpool = self.unpool(self.G_Im1  , self.Im1_unpool, [2 , 2] )
+        G_Im1_unpool = helper.unpool(self.G_Im1  , self.Im1_unpool, np.array([2 , 2]) )
 
         # apply relu_p
         G_Im1_unpool = self.relu_p(G_Im1_unpool)
 
         # Calculating gradients for feature map fm0
-        self.G_fm0 = self.error2grad( G_Im1_unpool , self.Im0)
+        self.G_fm0 = helper.error2grad( G_Im1_unpool , self.Im0)
         #
 
     def error_conv(self , G_Imk , fm_k_1 ): # fm_k_1 denotes fm(k-1)
@@ -118,10 +121,13 @@ class network:
                     # z is the image number in Imk
                     for z in z_range:
                         l = z % fm_k_1.shape[1]
-                        for i in range(b - fm_k_1.shape[2] , b+1 ):
-                            for j in range(c - fm_k_1.shape[3] , c + 1):
-                                if ( i < G_Imk.shape[1] & j < G_Imk.shape[2] & i > 0 & j > 0):
-                                    G_Imk_1[ a , b , c] += G_Imk[z , i , j] * fm_k_1[a , l , b-i , c-j]
+                        #for i in range( max(b - fm_k_1.shape[2] , 0) , min(b+1 ,  G_Imk.shape[1]) ):
+                        #    for j in range( max(c - fm_k_1.shape[3] , 0) , min(c + 1 ,  G_Imk.shape[1]) ):
+                        #        G_Imk_1[ a , b , c] += G_Imk[z , i , j] * fm_k_1[a , l , b-i , c-j]
+                        
+                        G_Imk_1[a , b , c] = np.sum(signal.fftconvolve(G_Imk[z , : , :] , fm_k_1[a , l , : , :]))
+                        #if (verify == G_Imk[a , : , :]):
+                        #    raise ValueError( "Verify same")
         return G_Imk_1
         #
 
@@ -130,10 +136,11 @@ class network:
         for m in range( G_fm_k_1.shape[0]):
             for n in range( G_fm_k_1.shape[1]):
                 z = m * G_fm_k_1.shape[1] + n
-                G_fm_k_1[ m , n  , : , :] = self.conv(Imk_1[m , : , :] , G_Imk[z , : , :] ) # dont ask for explanation it took me 3 hours to come up with this line of code.
+                G_fm_k_1[ m , n  , : , :] = signal.fftconvolve(Imk_1[m , : , :] , G_Imk[z , : , :]  , mode = "valid" ) # dont ask for explanation it took me 3 hours to come up with this line of code.
         return G_fm_k_1
 
     def relu(self , t):
+        t = t / 10
         t[ t < 0 ]  = 0
         return t 
 
@@ -212,7 +219,7 @@ class network:
         for i in range(Num_channel): # i is the depth channel
             initial = img[ i , : , : ]
             for j in range( Num_features ): # j is the number of feature matrices per channel\\\
-                final[ j + Num_features * i , : , : ] = self.conv( initial , feature_map[i , j , : , :] )
+                final[ j + Num_features * i , : , : ] = signal.fftconvolve( initial , feature_map[i , j , : , :]  , mode = 'valid')
         return final
         
     def conv(self , img  , feature):
@@ -227,7 +234,7 @@ class network:
         final = np.zeros( (np.size( img  , axis = 0)  , (int)(np.size( img  , axis = 1) / pool_map[0]) , (int) (np.size( img  , axis = 2)  / pool_map[1]) ))
         for i in range(Num_channel):
             initial = img[i , : , :]
-            final[i , : , :] = self.max_pool( initial  , pool_map ) 
+            final[i , : , :] = helper.max_pool( initial  , pool_map ) 
         return final
 
     def max_pool(self , img  , pool_map):
@@ -258,7 +265,7 @@ class network:
         
         self.Im1_unpool = img
         
-        img = self.max_pooling( img , np.array([2 , 2]) )
+        img = self.max_pooling( img , [2 , 2] )
 
         self.Im1 = img
         self.G_Im1 = np.zeros_like(self.Im1)
@@ -268,7 +275,7 @@ class network:
         
         self.Im2_unpool = img
 
-        img = self.max_pooling( img , np.array([2 , 2]) )
+        img = self.max_pooling( img , [2 , 2] )
 
         self.Im2 = img
         self.G_Im2 = np.zeros_like(self.Im2)

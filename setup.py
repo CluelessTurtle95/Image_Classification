@@ -1,6 +1,8 @@
-from distutils.core import setup
+from distutils.core import setup , Extension
 from Cython.Build import cythonize
- 
+import numpy
+
 setup(
-    ext_modules = cythonize("Supporting_functions.pyx")
+    ext_modules=cythonize("helper.pyx"),
+    include_dirs=[numpy.get_include()]
 )
