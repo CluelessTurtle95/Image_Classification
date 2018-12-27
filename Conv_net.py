@@ -45,7 +45,7 @@ class network:
         self.l[0] = self.l[0].reshape( np.size(self.l[0]) , 1)
         for i in range(self.Num_layers - 2):
             self.z[i] = self.weights[i]  @  self.l[i]  +   self.b[i]
-            self.l[i + 1] = self.relu(self.z[i])
+            self.l[i + 1] = self.relu(self.z[i])/5
 
         self.l[self.Num_layers - 1] = self.softmax(self.l[self.Num_layers - 2])
 
@@ -141,16 +141,17 @@ class network:
         return G_fm_k_1
 
     def relu(self , t):
-        t = t / 30
+        t = t/5
         t[ t < 0 ]  = 0
         return t 
 
     def relu_p(self , t):
         t[t < 0] = 0
-        t[t > 0] = 1/30
+        t[t > 0] = 1/5
         return t
 
     def softmax(self , t):
+        t = t/10
         t = np.exp(t)
         t = t / np.sum(t)
         return t
@@ -167,25 +168,25 @@ class network:
         # Forward pass assumed to be done in gradient_conv
         self.delta_FC(y)
         for i in range(self.Num_layers - 2):
-            self.G_b[i] +=  self.error[i + 1] * self.relu_p(self.z[i]) 
-            self.G_weights[i] += ( self.error[i + 1] * self.relu_p(self.z[i]) ) @ np.transpose(self.l[i]) + lambd * self.weights[i]
+            self.G_b[i] +=  self.error[i + 1] * self.relu_p(self.z[i]) / 5 
+            self.G_weights[i] += ( self.error[i + 1] * self.relu_p(self.z[i])/5 ) @ np.transpose(self.l[i]) + lambd * self.weights[i]
 
     def learn(self , X , result  , data_index , lambd , alpha , max_iter):
         
-        cost_saver = [None] * max_iter
+        self.cost_saver = [None] * max_iter
+        initial = data_index
         for i in range(max_iter):
             
             os.system('cls')
-            estimate = 'Calculating'
+            estimate = 0
             if (i == 0):
                 start_time = time.time()
             else:
                 estimate = (time.time() - start_time)*(max_iter - i) / i
-            print ( "Percentage Done : {} ".format(i / max_iter) )
-            print( "Time Left : {}".format(estimate) )
-
+            print( "Percentage Done : {} ".format(i*100 / max_iter) )
+            print( "Time Left : {} Hours {} mins ".format( np.floor(estimate / 3600) , estimate/60  - 60*np.floor(estimate / 3600)))
             # Calculate gradients
-            self.J_prime( X , result , data_index , lambd)
+            self.J_prime( X[initial:initial+data_index , : ,: , :] , result[initial:initial+data_index , : ] , data_index , lambd)
             
             # Using Gradient descent
             for j in range(self.Num_layers - 2):
@@ -197,10 +198,9 @@ class network:
             self.fm2 = self.fm2 - alpha * self.G_fm2
             
             # Saving Cost Vs Iterations for visualizations
-            cost_saver[i] = self.cost(X , result , data_index)
-            
-        return cost_saver
-    
+            self.cost_saver[i] = self.cost(X[initial:initial+data_index , : ,: , :] , result[initial:initial+data_index ,:] , data_index)
+            initial = initial + data_index
+
     def cost(self , X , result , data_index):
         b = 0
         for i in range(data_index):
@@ -212,7 +212,8 @@ class network:
     
     def plot_cost(self , X , result , data_index , lambd , alpha , max_iter):
         axis_x = np.linspace( 0  , max_iter , 1 + max_iter)
-        axis_y = self.learn(X ,result , data_index , lambd , alpha , max_iter)
+        self.learn(X ,result , data_index , lambd , alpha , max_iter)
+        axis_y = self.cost_saver
         axis_y.append(axis_y[-1])
         plt.plot(axis_x , axis_y )
         plt.xlabel( "Iterations" )
@@ -317,8 +318,10 @@ fm0 = np.random.rand( 1 , 2 , 5 , 5)
 fm1 = np.random.rand( 2 , 2 , 3 , 3)
 fm2 = np.random.rand( 4 , 3 , 3 , 3)
 
+#Designing Network
 net = network( [fm0 , fm1 , fm2] , [192 , 40 , 40 , 10 , 10])
 
+# Loading Data
 X = unpickle()
 result = X[b'labels']
 X = X[b'data']
@@ -326,9 +329,12 @@ X = X.reshape(X.shape[0] ,3 ,32 , 32)
 result_f  = np.zeros( ( X.shape[0] , 10) )
 for i in range(len(result)):
     result_f[i , result[i] ] = 1
+
+# preprocessing
 X_f = np.zeros((10000 ,  1, 32 ,32))
-
 for i in range(X.shape[0]):
-    X_f[i , 0 ,  : , :] = X[i, 0  , ... ] *0.299 +  X[i, 1  , ... ] * 0.587 + X[i, 2  , ... ] * 0.114
+    X_f[i , 0 ,  : , :] = X[i, 0  , ... ] *0.299 +  X[i, 1  , ... ] * 0.587 + X[i, 2  , ... ] * 0.114 # rgb to grayscale
+    X_f[i , 0 , : , :] = X_f[i , 0 , : , :] - np.sum(X_f[i , 0 , : , :])/np.size(X_f[i , 0 , : , :]) # mean 0
+    X_f[i , 0 , : , :] = X_f[i , 0 , : , :] / np.std(X_f[i , 0 , : , :]) # std 1
 
-net.plot_cost( X_f , result_f , 1000 , 0.1 , 0.01 , 100)
+net.plot_cost( X_f , result_f , 50 , 0.1 , 0.01 , 100)
