@@ -1,14 +1,12 @@
 # Image_Classification
 
 #### Note : 
-**Image Preprocesssing not done yet**
-
-**All of the math done by me and not confirmed properly from online sources (especially for convolution backprop) so take the code with a grain of salt**
+**Take the math with a grain of salt.**
 
 Convolutional Neural Network from scratch using only Numpy in python. 
 
 Image Classification Program 
-Using MNIST like database
+Using Cifar-10 database : https://www.cs.toronto.edu/~kriz/cifar.html
 Image size is 32 x 32 pixels 
 
 ## Steps : 
