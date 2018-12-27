@@ -56,7 +56,7 @@ class network:
             self.G_weights[index] = np.zeros_like(self.weights[index])
         
         for m in range(data_index):
-            self.gradient_conv( X[m , : , : , :] , result[: , m]  , lambd)
+            self.gradient_conv( X[m , : , : , :] , result[m , :]  , lambd)
         
         # gradient_conv adds all gradients so for loop to average the results.
         for index , b  in enumerate(self.b):
@@ -86,7 +86,7 @@ class network:
         self.G_Im2 = fast.error_conv( self.G_Im3 , self.fm2 )
 
         # Calculating the gradient for pooling layer 2
-        G_Im2_unpool = self.Im2 # do this
+        G_Im2_unpool = fast.unpool(self.G_Im2  ,  self.Im2_unpool ,  [2 , 2] )
 
         # apply relu_p
         G_Im2_unpool = self.relu_p(G_Im2_unpool)
@@ -98,7 +98,7 @@ class network:
         self.G_Im1 = fast.error_conv( self.G_Im2 , self.fm1 )
         
         # Calculating the gradient for pooling layer 1
-        G_Im1_unpool = self.Im1 # do this
+        G_Im1_unpool = fast.unpool(self.G_Im1  , self.Im1_unpool, [2 , 2] )
 
         # apply relu_p
         G_Im1_unpool = self.relu_p(G_Im1_unpool)
@@ -106,7 +106,7 @@ class network:
         # Calculating gradients for feature map fm0
         self.G_fm0 = fast.error2grad( G_Im1_unpool , self.Im0)
         #
-
+   
     def relu(self , t):
         t[ t < 0 ]  = 0
         return t 
@@ -141,6 +141,8 @@ class network:
         
         cost_saver = [None] * max_iter
         for i in range(max_iter):
+            # shuffle X , result
+
             # Calculate gradients
             self.J_prime( X , result , data_index , lambd)
             
@@ -162,7 +164,7 @@ class network:
         b = 0
         for i in range(data_index):
             self.Forward_Propogation_conv(X[i , : , : , :])
-            a = self.l[self.Num_layers - 1].reshape( np.size(self.l[self.Num_layers - 1] ) , 1) - result[: , i].reshape( np.size(result[: , i]) , 1)
+            a = self.l[self.Num_layers - 1].reshape( np.size(self.l[self.Num_layers - 1] ) , 1) - result[i , :].reshape( np.size(result[i , :]) , 1)
             b += np.sum(a*a) / np.size(a)
         b = b / data_index
         return b
@@ -191,6 +193,9 @@ class network:
 
         img = fast.convolve( img , self.fm0 )
         img = self.relu(img)
+
+        self.Im1_unpool = img
+
         img = self.max_pooling( img , np.array([2 , 2]) )
 
         self.Im1 = img
@@ -198,6 +203,9 @@ class network:
 
         img = fast.convolve( img , self.fm1 )
         img = self.relu(img)
+        
+        self.Im2_unpool = img
+
         img = self.max_pooling( img , np.array([2 , 2]) )
 
         self.Im2 = img
@@ -225,7 +233,10 @@ fm2 = np.random.rand( 4 , 3 , 3 , 3)
 
 net = network( [fm0 , fm1 , fm2] , [192 , 40 , 40 , 10 , 10])
 
-# X = np.random.rand(10 , 20)
-# result  = np.random.rand(2 , 20)
+X = np.random.rand( 40 , 1 , 32 , 32)
+result  = np.zeros( (40, 10) )
+for i in range(40):
+    j = np.random.randint(0 , high = 10)
+    result[i , j] = 1
 
-#net.plot_cost( X , result , len(X) , 0.1 , 0.01 , 200)
+net.plot_cost( X , result , 40 , 0.1 , 0.01 , 50)
