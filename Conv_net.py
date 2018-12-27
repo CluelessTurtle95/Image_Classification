@@ -1,8 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
-
+import time
 import helper
+import os
 from scipy import signal
 
 class network:
@@ -140,13 +141,13 @@ class network:
         return G_fm_k_1
 
     def relu(self , t):
-        t = t / 10
+        t = t / 30
         t[ t < 0 ]  = 0
         return t 
 
     def relu_p(self , t):
         t[t < 0] = 0
-        t[t > 0] = 1
+        t[t > 0] = 1/30
         return t
 
     def softmax(self , t):
@@ -156,7 +157,7 @@ class network:
 
     def delta_FC(self , y):
         y = y.reshape(np.size(y),1)
-
+        self.error.clear()
         self.error.insert( 0 , (self.l[-1] - y) / self.Num_layers ) 
         self.error.insert( 0 , self.error[0] * self.l[-1] * (1 - self.l[-1]) ) # L_sub(l) = self.l[-1]
         for i in range(2 , self.Num_layers ):
@@ -173,6 +174,16 @@ class network:
         
         cost_saver = [None] * max_iter
         for i in range(max_iter):
+            
+            os.system('cls')
+            estimate = 'Calculating'
+            if (i == 0):
+                start_time = time.time()
+            else:
+                estimate = (time.time() - start_time)*(max_iter - i) / i
+            print ( "Percentage Done : {} ".format(i / max_iter) )
+            print( "Time Left : {}".format(estimate) )
+
             # Calculate gradients
             self.J_prime( X , result , data_index , lambd)
             
@@ -296,16 +307,28 @@ def createlayers(layer_elements):
         a.append( np.zeros( (i , 1) ) )
     return a
 
+def unpickle(file = r'C:\Users\Parth Sindhu\Documents\GitHub\Image_Classification\cifar-10-batches-py\data_batch_1'):
+    import pickle
+    with open(file, 'rb') as fo:
+        dict = pickle.load(fo, encoding='bytes')
+    return dict
+
 fm0 = np.random.rand( 1 , 2 , 5 , 5)
 fm1 = np.random.rand( 2 , 2 , 3 , 3)
 fm2 = np.random.rand( 4 , 3 , 3 , 3)
 
 net = network( [fm0 , fm1 , fm2] , [192 , 40 , 40 , 10 , 10])
 
-X = np.random.rand( 40 , 1 , 32 , 32)
-result  = np.zeros( (40, 10) )
-for i in range(40):
-    j = np.random.randint(0 , high = 10)
-    result[i , j] = 1
+X = unpickle()
+result = X[b'labels']
+X = X[b'data']
+X = X.reshape(X.shape[0] ,3 ,32 , 32)
+result_f  = np.zeros( ( X.shape[0] , 10) )
+for i in range(len(result)):
+    result_f[i , result[i] ] = 1
+X_f = np.zeros((10000 ,  1, 32 ,32))
 
-net.plot_cost( X , result , 10 , 1 , 0.001 , 10)
+for i in range(X.shape[0]):
+    X_f[i , 0 ,  : , :] = X[i, 0  , ... ] *0.299 +  X[i, 1  , ... ] * 0.587 + X[i, 2  , ... ] * 0.114
+
+net.plot_cost( X_f , result_f , 1000 , 0.1 , 0.01 , 100)
